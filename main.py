@@ -15,8 +15,8 @@ import telebot
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8226177508:AAEhEO8PwgrvY-mYA8hCJhB5Vag977iay_E")
 CHANNEL_ID = -1002814870264
 
-# Note: Send a sticker to the bot privately to get its correct ID
-WIN_STICKER_ID = "CAACAgUAAxkBAAER4h1qo_aDagqTDFeZsvVfXRWkHL1gMQACxiAAAlKt-FSX-5IBfGtcPz0E"
+# Updated Win Sticker ID
+WIN_STICKER_ID = "CAACAgUAAxkBAAEG_9dqpxaKXtzfwrbW4Na4DTUzBCMvUQACahIAAvYiyVZikUGUoRZynz0E"
 
 # ============================================================
 # INITIALIZATION
@@ -158,18 +158,17 @@ def send_prediction(period):
         with state_lock:
             total_rounds_played += 1
             predictions[period] = {"size": size, "created_at": time.time()}
-            level = current_level
 
             if len(predictions) > MAX_PREDICTIONS:
                 oldest = next(iter(predictions))
                 del predictions[oldest]
 
+        # Level removed from the channel message
         message = (
             "👑 𝕍𝔼𝔼ℝ 𝔾𝔸𝕄𝔼 👑\n"
             "🔥 <b>WINGO 1 MIN</b> 🔥\n\n"
             f"📅 <b>PERIOD NUMBER:</b> <code>{period}</code>\n\n"
-            f"📊 <b>PREDICTION:</b> <b>{size}</b>\n"
-            f"📈 <b>LEVEL:</b> <code>{level} / 8</code>\n\n"
+            f"📊 <b>PREDICTION:</b> <b>{size}</b>\n\n"
             "📩 <b>DM FOR MORE DETAILS:</b>\n"
             "@Maayan001\n"
             "@anonymoustele01\n"
@@ -177,7 +176,7 @@ def send_prediction(period):
         )
 
         bot.send_message(CHANNEL_ID, message, parse_mode="HTML")
-        print(f"Prediction sent successfully: {period} ({size}) - Level {level}")
+        print(f"Prediction sent successfully: {period} ({size})")
     except Exception as error:
         print(f"Prediction error: {error}")
 
@@ -194,7 +193,6 @@ def automatic_prediction_loop():
         try:
             current_period = get_time_based_period()
             if current_period != last_period:
-                # 15 seconds delay so you have time to enter /result for level update
                 time.sleep(15) 
                 send_prediction(current_period)
                 last_period = current_period
@@ -206,7 +204,6 @@ def automatic_prediction_loop():
 # COMMANDS
 # ============================================================
 
-# Sticker ID Fetcher
 @bot.message_handler(content_types=['sticker'])
 def handle_sticker(message):
     bot.reply_to(message, f"Paste this ID into WIN_STICKER_ID:\n\n<code>{message.sticker.file_id}</code>", parse_mode="HTML")
@@ -284,6 +281,7 @@ def result_command(message):
         add_to_history(number)
         status = "WIN 🏆" if is_win else "LOSS ❌"
 
+        # Level display removed from result response as well
         text = (
             "╔════════════════════╗\n"
             "     📊 <b>RESULT</b>\n"
@@ -293,12 +291,12 @@ def result_command(message):
             f"🔢 Result: <code>{number}</code>\n"
             f"📊 Actual size: <b>{actual_size}</b>\n"
             f"🎨 Color: <b>{get_color(number)}</b>\n\n"
-            f"🏆 Status: <b>{status}</b>\n"
-            f"📈 Level: <b>{current_level}/8</b>"
+            f"🏆 Status: <b>{status}</b>"
         )
 
         bot.reply_to(message, text, parse_mode="HTML")
 
+        # Win Sticker Logic
         if is_win:
             try:
                 if WIN_STICKER_ID:
@@ -353,7 +351,6 @@ def status_command(message):
     hours = uptime // 3600
     minutes = (uptime % 3600) // 60
     with state_lock:
-        level = current_level
         rounds = total_rounds_played
         history_count = len(history)
         prediction_count = len(predictions)
@@ -362,7 +359,6 @@ def status_command(message):
         "📊 <b>BOT STATUS</b>\n\n"
         "🟢 Status: <code>ONLINE</code>\n"
         f"⏳ Uptime: <code>{hours}h {minutes}m</code>\n"
-        f"📈 Level: <code>{level}/8</code>\n"
         f"🎯 Records: <code>{rounds}</code>\n"
         f"📋 History: <code>{history_count}</code>\n"
         f"🗂 Predictions: <code>{prediction_count}</code>"
