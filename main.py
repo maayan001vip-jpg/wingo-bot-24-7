@@ -14,7 +14,6 @@ import telebot
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8226177508:AAEhEO8PwgrvY-mYA8hCJhB5Vag977iay_E")
 CHANNEL_ID = -1002814870264
-
 WIN_STICKER_ID = "CAACAgUAAxkBAAEG_8pqpxMonFOAxGhTf1PjBPQzORf2UwACxiAAAlKt-FSX-5IBfGtcPz0E"
 
 # ============================================================
@@ -24,15 +23,15 @@ WIN_STICKER_ID = "CAACAgUAAxkBAAEG_8pqpxMonFOAxGhTf1PjBPQzORf2UwACxiAAAlKt-FSX-5
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-current_level = 1
 total_rounds_played = 0
 predictions = {}
 last_prediction_size = None
+history = []  # Stores "B" or "S"
 bot_start_time = time.time()
 state_lock = threading.Lock()
 
 # ============================================================
-# PERIOD GENERATION
+# PERIOD & PATTERNS
 # ============================================================
 
 def get_time_based_period():
@@ -43,6 +42,49 @@ def get_time_based_period():
     date_string = now.strftime("%Y%m%d")
     return f"{date_string}10001{sequence:04d}"
 
+def get_runs(sequence):
+    if not sequence:
+        return []
+    runs = []
+    current = sequence[0]
+    count = 1
+    for value in sequence[1:]:
+        if value == current:
+            count += 1
+        else:
+            runs.append((current, count))
+            current = value
+            count = 1
+    runs.append((current, count))
+    return runs
+
+def detect_patterns(sequence):
+    patterns = []
+    if len(sequence) < 3:
+        return ["Not enough history"]
+
+    if len(sequence) >= 4:
+        x = sequence[-4:]
+        if x[0] == x[2] and x[1] == x[3] and x[0] != x[1]:
+            patterns.append("ABAB")
+        if x[0] == x[1] and x[2] == x[3] and x[0] != x[2]:
+            patterns.append("AABB")
+        if x[0] == x[1] and x[1] == x[2] and x[2] != x[3]:
+            patterns.append("AAAB")
+        if x[0] != x[1] and x[1] == x[2] and x[2] == x[3]:
+            patterns.append("ABBB")
+
+    if len(sequence) >= 3 and len(set(sequence[-3:])) == 1:
+        patterns.append("TRIPLE TREND")
+    if len(sequence) >= 4 and len(set(sequence[-4:])) == 1:
+        patterns.append("QUAD TREND")
+    if len(sequence) >= 5 and len(set(sequence[-5:])) == 1:
+        patterns.append("LONG TREND")
+
+    if not patterns:
+        patterns.append("MIXED")
+    return patterns
+
 # ============================================================
 # TELEGRAM DISPATCH
 # ============================================================
@@ -50,7 +92,7 @@ def get_time_based_period():
 def send_prediction(period):
     global total_rounds_played, last_prediction_size
     try:
-        options = ["📈 BIG", "📉 SMALL"]
+        options = ["BIG", "SMALL"]
         if last_prediction_size in options:
             options.remove(last_prediction_size)
 
@@ -60,18 +102,17 @@ def send_prediction(period):
         with state_lock:
             total_rounds_played += 1
             predictions[period] = {"size": size, "created_at": time.time()}
-            level = current_level
 
             if len(predictions) > 20:
                 oldest = next(iter(predictions))
                 del predictions[oldest]
 
+        # Level display removed entirely
         message = (
             "👑 𝕍𝔼𝔼ℝ 𝔾𝔸𝕄𝔼 👑\n"
             "🔥 <b>WINGO 1 MIN</b> 🔥\n\n"
             f"📅 <b>PERIOD NUMBER:</b> <code>{period}</code>\n\n"
-            f"📊 <b>PREDICTION:</b> {size}\n"
-            f"📈 <b>LEVEL:</b> <code>{level} / 8</code>\n\n"
+            f"📊 <b>PREDICTION:</b> <b>{size}</b>\n\n"
             "📩 <b>DM FOR MORE DETAILS:</b>\n"
             "@Maayan001\n"
             "@anonymoustele01\n"
@@ -79,13 +120,11 @@ def send_prediction(period):
         )
 
         bot.send_message(CHANNEL_ID, message, parse_mode="HTML")
-        print(f"Prediction sent: {period} ({size}) - Level {level}")
+        print(f"Prediction sent: {period} ({size})")
     except Exception as error:
         print(f"Prediction error: {error}")
 
-
 def automatic_prediction_loop():
-    global current_level
     print("Prediction loop started.")
     last_period = None
 
@@ -95,22 +134,28 @@ def automatic_prediction_loop():
 
             if current_period != last_period:
                 if last_period is not None:
+                    # Simulation: 55% win chance
+                    is_win = (random.random() < 0.55)
+                    
                     with state_lock:
-                        if current_level >= 5:
-                            is_win = True
-                        else:
-                            is_win = (random.random() < 0.55)
+                        if last_period in predictions:
+                            predicted = predictions[last_period]["size"]
+                            # Determine actual size based on win/loss
+                            actual_size = predicted if is_win else ("SMALL" if predicted == "BIG" else "BIG")
+                            
+                            # Add to history for Pattern logic
+                            history.append("B" if actual_size == "BIG" else "S")
+                            if len(history) > 50:
+                                history.pop(0)
 
-                        if is_win:
+                    if is_win:
+                        try:
                             bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
-                            print(f"Period {last_period}: WIN! Level reset to 1.")
-                            current_level = 1
-                        else:
-                            print(f"Period {last_period}: LOSS. Level incremented.")
-                            if current_level < 8:
-                                current_level += 1
-                            else:
-                                current_level = 1
+                        except Exception:
+                            pass
+                        print(f"Period {last_period}: WIN!")
+                    else:
+                        print(f"Period {last_period}: LOSS.")
 
                 send_prediction(current_period)
                 last_period = current_period
@@ -128,7 +173,53 @@ def automatic_prediction_loop():
 def start_command(message):
     text = (
         "🤖 <b>Veer Game Bot</b>\n\n"
-        "🟢 Bot is online and running smoothly."
+        "🟢 Bot is online and running smoothly.\n\n"
+        "<b>Commands:</b>\n"
+        "/status - View uptime & records\n"
+        "/history - View recent BIG/SMALL results\n"
+        "/analysis - View detected trends & patterns"
+    )
+    bot.reply_to(message, text, parse_mode="HTML")
+
+@bot.message_handler(commands=["history"])
+def history_command(message):
+    with state_lock:
+        data = list(history)
+    if not data:
+        bot.reply_to(message, "❌ No history available yet.")
+        return
+
+    recent = data[-20:]
+    lines = [f"{i}. {'BIG' if x == 'B' else 'SMALL'}" for i, x in enumerate(recent, 1)]
+    text = "📋 <b>RECENT HISTORY</b>\n\n" + "\n".join(lines)
+    bot.reply_to(message, text, parse_mode="HTML")
+
+@bot.message_handler(commands=["analysis"])
+def analysis_command(message):
+    with state_lock:
+        seq = list(history)
+    
+    if len(seq) < 3:
+        bot.reply_to(message, "❌ Not enough history for analysis. Wait for a few rounds.")
+        return
+
+    big_count = seq.count("B")
+    small_count = seq.count("S")
+    runs = get_runs(seq)
+    last_value = "BIG" if runs[-1][0] == "B" else "SMALL"
+    last_run = runs[-1][1]
+    patterns = detect_patterns(seq)
+
+    text = (
+        "╔════════════════════╗\n"
+        "      🔍 <b>PATTERN ANALYSIS</b>\n"
+        "╚════════════════════╝\n\n"
+        f"📊 Total Rounds: <code>{len(seq)}</code>\n"
+        f"📈 BIG Count: <code>{big_count}</code>\n"
+        f"📉 SMALL Count: <code>{small_count}</code>\n\n"
+        f"🔁 Last Result: <b>{last_value}</b>\n"
+        f"🔢 Current Streak: <code>{last_run}</code>\n\n"
+        f"🔍 Detected Patterns:\n<code>{', '.join(patterns)}</code>"
     )
     bot.reply_to(message, text, parse_mode="HTML")
 
@@ -137,14 +228,12 @@ def status_command(message):
     uptime = int(time.time() - bot_start_time)
     hours = uptime // 3600
     minutes = (uptime % 3600) // 60
-    with state_lock:
-        level = current_level
 
     text = (
         "📊 <b>BOT STATUS</b>\n\n"
         "🟢 Status: <code>ONLINE</code>\n"
         f"⏳ Uptime: <code>{hours}h {minutes}m</code>\n"
-        f"📈 Current Level: <code>{level} / 8</code>\n"
+        f"🎯 Records Played: <code>{total_rounds_played}</code>\n"
         f"📢 Channel ID: <code>{CHANNEL_ID}</code>"
     )
     bot.reply_to(message, text, parse_mode="HTML")
