@@ -17,9 +17,6 @@ CHANNEL_ID = -1002814870264
 
 WIN_STICKER_ID = "CAACAgUAAxkBAAER4h1qo_aDagqTDFeZsvVfXRWkHL1gMQACxiAAAlKt-FSX-5IBfGtcPz0E"
 
-# Telegram user IDs who can use admin commands (Leave empty set {} if everyone can use, or add your Telegram ID number)
-ADMIN_IDS = set(6842709265)
-
 # ============================================================
 # INITIALIZATION
 # ============================================================
@@ -45,21 +42,11 @@ MAX_PREDICTIONS = 50
 
 
 # ============================================================
-# ADMIN CHECK
-# ============================================================
-
-def is_admin(message):
-    if not ADMIN_IDS:
-        return True  # If no admins specified, allow all for testing
-    return message.from_user.id in ADMIN_IDS
-
-
-# ============================================================
-# PERIOD
+# PERIOD (UTC SYNCED FOR WINGO)
 # ============================================================
 
 def get_time_based_period():
-    tz = pytz.timezone("Asia/Kolkata")
+    tz = pytz.utc
     now = datetime.datetime.now(tz)
     total_minutes = now.hour * 60 + now.minute
     sequence = total_minutes + 1
@@ -169,7 +156,7 @@ def analyze_history():
 
 
 # ============================================================
-# AUTOMATIC PREDICTION GENERATOR
+# AUTOMATIC PREDICTION GENERATOR (FIXED)
 # ============================================================
 
 def send_prediction(period):
@@ -198,13 +185,22 @@ def send_prediction(period):
         )
 
         bot.send_message(CHANNEL_ID, message, parse_mode="HTML")
-        print(f"Prediction sent: {period} ({size}) - Level {level}")
+        print(f"Prediction sent successfully: {period} ({size}) - Level {level}")
     except Exception as error:
         print(f"Prediction error: {error}")
 
 def automatic_prediction_loop():
     print("Automatic prediction loop started.")
     last_period = None
+    
+    # Send first prediction immediately on startup
+    try:
+        initial_period = get_time_based_period()
+        send_prediction(initial_period)
+        last_period = initial_period
+    except Exception as e:
+        print(f"Initial prediction error: {e}")
+
     while True:
         try:
             current_period = get_time_based_period()
@@ -217,14 +213,11 @@ def automatic_prediction_loop():
 
 
 # ============================================================
-# ADMIN COMMANDS
+# COMMANDS (ALL OPEN)
 # ============================================================
 
 @bot.message_handler(commands=["add"])
 def add_command(message):
-    if not is_admin(message):
-        bot.reply_to(message, "❌ Admin only.")
-        return
     try:
         parts = message.text.split()
         if len(parts) != 2:
@@ -253,9 +246,6 @@ def add_command(message):
 @bot.message_handler(commands=["result"])
 def result_command(message):
     global current_level
-    if not is_admin(message):
-        bot.reply_to(message, "❌ Admin only.")
-        return
     try:
         parts = message.text.split()
         if len(parts) != 3:
@@ -403,7 +393,7 @@ def status_command(message):
 def start_command(message):
     text = (
         "🤖 <b>VEER GAME BOT</b>\n\n"
-        "🟢 Bot is online.\n\n"
+        "🟢 Bot is online and ready.\n\n"
         "<b>Commands:</b>\n"
         "/status - Bot status\n"
         "/history - Recent history\n"
