@@ -13,7 +13,7 @@ logging.basicConfig(
 )
 
 # Configuration
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+TELEGRAM_BOT_TOKEN = "8226177508:AAEhEO8PwgrvY-mYA8hCJhB5Vag977iay_E"
 
 # Telegram Sticker File IDs (Replace with your actual Sticker IDs)
 STICKER_BIG = "CAACAgIAAxkBAAE..."   
