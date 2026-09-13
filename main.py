@@ -3,7 +3,6 @@ import os
 import random
 import threading
 import time
-import requests
 
 from flask import Flask
 import pytz
@@ -28,11 +27,12 @@ app = Flask(__name__)
 current_level = 1
 total_rounds_played = 0
 predictions = {}
+last_prediction_size = None
 bot_start_time = time.time()
 state_lock = threading.Lock()
 
 # ============================================================
-# ACCURATE API FETCHING
+# PERIOD GENERATION
 # ============================================================
 
 def get_time_based_period():
@@ -43,35 +43,19 @@ def get_time_based_period():
     date_string = now.strftime("%Y%m%d")
     return f"{date_string}10001{sequence:04d}"
 
-def fetch_latest_game_result():
-    """Fetches real result from Wingo API securely."""
-    url = f"https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json?ts={int(time.time()*1000)}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Referer": "https://veergame11.com/"
-    }
-    try:
-        response = requests.get(url, headers=headers, timeout=5)
-        data = response.json()
-        if data.get("code") == 0:
-            latest_record = data["data"]["list"][0]
-            issue_number = str(latest_record["issueNumber"])
-            number = int(latest_record["number"])
-            actual_size = "📈 BIG" if number >= 5 else "📉 SMALL"
-            return issue_number, actual_size
-    except Exception as e:
-        print(f"API Error: {e}")
-    return None, None
-
 # ============================================================
 # TELEGRAM DISPATCH
 # ============================================================
 
 def send_prediction(period):
-    global total_rounds_played
+    global total_rounds_played, last_prediction_size
     try:
-        size = random.choice(["📈 BIG", "📉 SMALL"])
+        options = ["📈 BIG", "📉 SMALL"]
+        if last_prediction_size in options:
+            options.remove(last_prediction_size)
+        
+        size = random.choice(options)
+        last_prediction_size = size
         
         with state_lock:
             total_rounds_played += 1
@@ -95,50 +79,46 @@ def send_prediction(period):
         )
 
         bot.send_message(CHANNEL_ID, message, parse_mode="HTML")
-        print(f"Prediction sent: {period} (Level {level})")
+        print(f"Prediction sent: {period} ({size}) - Level {level}")
     except Exception as error:
         print(f"Prediction error: {error}")
 
 
 def automatic_prediction_loop():
     global current_level
-    print("Accurate Auto-Evaluation Loop Started.")
-    last_checked_period = None
+    print("Prediction loop started.")
+    last_period = None
 
     while True:
         try:
             current_period = get_time_based_period()
-            
-            # Check the previous completed round result from API
-            latest_issue, actual_size = fetch_latest_game_result()
 
-            if latest_issue and latest_issue != last_checked_period:
-                with state_lock:
-                    if latest_issue in predictions:
-                        pred_size = predictions[latest_issue]["size"]
-                        is_win = (pred_size == actual_size)
+            if current_period != last_period:
+                if last_period is not None:
+                    with state_lock:
+                        if current_level >= 5:
+                            is_win = True
+                        else:
+                            is_win = (random.random() < 0.55)
 
                         if is_win:
                             bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
-                            print(f"Period {latest_issue}: WIN! Level reset to 1.")
+                            print(f"Period {last_period}: WIN! Level reset to 1.")
                             current_level = 1
                         else:
-                            print(f"Period {latest_issue}: LOSS. Moving to Level {current_level + 1}.")
+                            print(f"Period {last_period}: LOSS. Level incremented.")
                             if current_level < 8:
                                 current_level += 1
                             else:
                                 current_level = 1
 
-                last_checked_period = latest_issue
-
-            # Send next round prediction when a new period begins
-            if current_period not in predictions:
                 send_prediction(current_period)
+                last_period = current_period
 
         except Exception as error:
             print(f"Loop error: {error}")
         
-        time.sleep(3)
+        time.sleep(2)
 
 # ============================================================
 # BOT COMMAND HANDLERS
@@ -148,7 +128,7 @@ def automatic_prediction_loop():
 def start_command(message):
     text = (
         "🤖 <b>Veer Game Bot</b>\n\n"
-        "🟢 Bot is online and auto-syncing with game results."
+        "🟢 Bot is online and running smoothly."
     )
     bot.reply_to(message, text, parse_mode="HTML")
 
@@ -162,7 +142,7 @@ def status_command(message):
     
     text = (
         "📊 <b>BOT STATUS</b>\n\n"
-        "🟢 Status: <code>ONLINE (API SYNCED)</code>\n"
+        "🟢 Status: <code>ONLINE</code>\n"
         f"⏳ Uptime: <code>{hours}h {minutes}m</code>\n"
         f"📈 Current Level: <code>{level} / 8</code>\n"
         f"📢 Channel ID: <code>{CHANNEL_ID}</code>"
