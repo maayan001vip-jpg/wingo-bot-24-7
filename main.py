@@ -17,6 +17,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "8226177508:AAEhEO8PwgrvY-mYA8hCJhB5Vag977iay
 CHANNEL_ID = -1002814870264
 
 WIN_STICKER_ID = "CAACAgUAAxkBAAER4h1qo_aDagqTDFeZsvVfXRWkHL1gMQACxiAAAlKt-FSX-5IBfGtcPz0E"
+LOSS_STICKER_ID = "CAACAgUAAxkBAAER4h9qo_aX3jMiUFY5WnP-YiWldp1WOgACJg8AAhRQUVTAisD_A8dpDz0E"
 
 # ============================================================
 # INITIALIZATION
@@ -127,12 +128,13 @@ def automatic_prediction_loop():
                                 else:
                                     is_win = (random.random() < 0.40)
 
-                            # 3. Process Result
+                            # 3. Process Result & Send Sticker accordingly
                             if is_win:
                                 bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
                                 print(f"Period {last_period}: WIN! Level reset to 1.")
                                 current_level = 1
                             else:
+                                bot.send_sticker(CHANNEL_ID, LOSS_STICKER_ID)
                                 print(f"Period {last_period}: LOSS. Next Level.")
                                 current_level += 1
 
@@ -143,7 +145,6 @@ def automatic_prediction_loop():
         except Exception as error:
             print(f"Loop error: {error}")
         
-        # Check every 2 seconds to match the exact minute change
         time.sleep(2)
 
 # ============================================================
@@ -154,7 +155,7 @@ def automatic_prediction_loop():
 def start_command(message):
     text = (
         "🤖 <b>TA Drama Shorts Bot</b>\n\n"
-        "🟢 Bot is online (Hybrid System Active).\n\n"
+        "🟢 Bot is online (Win/Loss Stickers Active).\n\n"
         "Predictions run 24/7 automatically."
     )
     bot.reply_to(message, text, parse_mode="HTML")
