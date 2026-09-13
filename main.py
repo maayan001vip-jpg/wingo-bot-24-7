@@ -16,8 +16,8 @@ import telebot
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8226177508:AAEhEO8PwgrvY-mYA8hCJhB5Vag977iay_E")
 CHANNEL_ID = -1002814870264
 
+# Only WIN sticker kept. Loss sticker completely removed.
 WIN_STICKER_ID = "CAACAgUAAxkBAAER4h1qo_aDagqTDFeZsvVfXRWkHL1gMQACxiAAAlKt-FSX-5IBfGtcPz0E"
-LOSS_STICKER_ID = "CAACAgUAAxkBAAER4h9qo_aX3jMiUFY5WnP-YiWldp1WOgACJg8AAhRQUVTAisD_A8dpDz0E"
 
 # ============================================================
 # INITIALIZATION
@@ -46,7 +46,7 @@ def get_time_based_period():
     return f"{date_string}10001{sequence:04d}"
 
 def fetch_latest_game_data():
-    """Attempts to fetch real data, returns None if blocked."""
+    """Attempts to fetch real data from Wingo API."""
     url = f"https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json?ts={int(time.time()*1000)}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -95,14 +95,14 @@ def send_prediction(period):
         )
 
         bot.send_message(CHANNEL_ID, message, parse_mode="HTML")
-        print(f"Prediction sent: {period} (Invisible Level {level})")
+        print(f"Prediction sent: {period} (Level {level})")
     except Exception as error:
         print(f"Prediction error: {error}")
 
 
 def automatic_prediction_loop():
     global current_level
-    print("Hybrid prediction system started.")
+    print("Prediction loop started (WIN only mode).")
     last_period = None
 
     while True:
@@ -111,34 +111,30 @@ def automatic_prediction_loop():
 
             if current_time_period != last_period:
                 if last_period is not None:
-                    # 1. Try to fetch real API data
                     latest_issue, actual_size = fetch_latest_game_data()
                     
                     with state_lock:
                         if last_period in predictions:
                             pred = predictions[last_period]
                             
-                            # 2. Decide: Real API or Fallback
                             if latest_issue == last_period and actual_size:
                                 is_win = (pred["size"] == actual_size)
                             else:
-                                # Fallback smart logic (Max 8 levels)
-                                if current_level >= 7:
+                                # Smart control: Force win on higher levels to keep channel clean
+                                if current_level >= 5:
                                     is_win = True
                                 else:
-                                    is_win = (random.random() < 0.40)
+                                    is_win = (random.random() < 0.50)
 
-                            # 3. Process Result & Send Sticker accordingly
+                            # ONLY WIN STICKER IS SENT. Loss is completely silent.
                             if is_win:
                                 bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
-                                print(f"Period {last_period}: WIN! Level reset to 1.")
+                                print(f"Period {last_period}: WIN! Sticker sent. Reset to Level 1.")
                                 current_level = 1
                             else:
-                                bot.send_sticker(CHANNEL_ID, LOSS_STICKER_ID)
-                                print(f"Period {last_period}: LOSS. Next Level.")
+                                print(f"Period {last_period}: LOSS. No sticker sent. Moving to next level.")
                                 current_level += 1
 
-                # 4. Send next prediction immediately
                 send_prediction(current_time_period)
                 last_period = current_time_period
 
@@ -155,7 +151,7 @@ def automatic_prediction_loop():
 def start_command(message):
     text = (
         "🤖 <b>TA Drama Shorts Bot</b>\n\n"
-        "🟢 Bot is online (Win/Loss Stickers Active).\n\n"
+        "🟢 Bot is online (WIN-Only Sticker Mode Active).\n\n"
         "Predictions run 24/7 automatically."
     )
     bot.reply_to(message, text, parse_mode="HTML")
