@@ -16,7 +16,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "8226177508:AAEhEO8PwgrvY-mYA8hCJhB5Vag977iay
 CHANNEL_ID = -1002814870264
 
 WIN_STICKER_ID = "CAACAgUAAxkBAAER4h1qo_aDagqTDFeZsvVfXRWkHL1gMQACxiAAAlKt-FSX-5IBfGtcPz0E"
-LOSS_STICKER_ID = "CAACAgUAAxkBAAER4h9qo_aX3jMiUFY5WnP-YiWldp1WOgACJg8AAhRQUVTAisD_A8dpDz0E"
 
 # ============================================================
 # INITIALIZATION
@@ -45,36 +44,18 @@ def get_current_period_info():
 
 
 def generate_prediction():
-    number = random.randint(0, 9)
-
-    if number in [2, 4, 6, 8]:
-        color = "🔴 RED"
-        emoji = "🔴"
-    elif number in [1, 3, 7, 9]:
-        color = "🟢 GREEN"
-        emoji = "🟢"
-    elif number == 0:
-        color = "🔴🟣 RED + VIOLET"
-        emoji = "🔴"
-    else:
-        color = "🟢🟣 GREEN + VIOLET"
-        emoji = "🟢"
-
-    size = "📈 BIG" if number >= 5 else "📉 SMALL"
-    return number, color, size, emoji
+    # Only returns BIG or SMALL
+    return random.choice(["📈 BIG", "📉 SMALL"])
 
 
 def create_prediction():
     global total_rounds_played
     period = get_current_period_info()
-    number, color, size, emoji = generate_prediction()
+    size = generate_prediction()
 
     prediction = {
         "period": period,
-        "number": number,
-        "color": color,
         "size": size,
-        "emoji": emoji,
         "created_at": time.time(),
     }
 
@@ -98,17 +79,12 @@ def send_prediction():
         prediction, level = create_prediction()
 
         period = prediction["period"]
-        number = prediction["number"]
-        color = prediction["color"]
         size = prediction["size"]
-        emoji = prediction["emoji"]
 
         message = (
             "🔥 <b>WINGO 1 MIN</b> 🔥\n\n"
             f"📅 <b>PERIOD NUMBER:</b> <code>{period}</code>\n\n"
-            f"📊 <b>BIG/SMALL:</b> {size}\n"
-            f"🎨 <b>COLOR:</b> {color}\n"
-            f"🔢 <b>NUMBER:</b> {emoji} <code>{number}</code> {emoji}\n\n"
+            f"📊 <b>PREDICTION:</b> {size}\n"
             f"📈 <b>LEVEL:</b> <code>{level}</code>\n\n"
             "📩 <b>DM FOR MORE DETAILS:</b>\n"
             "@Maayan001\n"
@@ -122,31 +98,33 @@ def send_prediction():
             message,
             parse_mode="HTML"
         )
-        print(f"Prediction sent: {period}")
+        print(f"Prediction sent: {period} (Level {level})")
 
     except Exception as error:
         print(f"Prediction error: {error}")
 
 
 def evaluate_previous_period(expired_period):
-    """Evaluates result and sends Win/Loss sticker to channel."""
+    """Evaluates result, updates level, and sends WIN sticker only."""
+    global current_level
     try:
         with state_lock:
             if expired_period in predictions:
                 pred = predictions[expired_period]
-                actual_number = random.randint(0, 9)
                 
-                predicted_is_big = pred["number"] >= 5
-                actual_is_big = actual_number >= 5
+                # Simulating the actual game result for this round
+                actual_size = random.choice(["📈 BIG", "📉 SMALL"])
 
-                is_win = (predicted_is_big == actual_is_big)
+                is_win = (pred["size"] == actual_size)
 
                 if is_win:
                     bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
-                    print(f"Period {expired_period}: WIN sticker sent.")
+                    print(f"Period {expired_period}: WIN sticker sent. Level reset to 1.")
+                    current_level = 1  # Reset to Level 1 on win
                 else:
-                    bot.send_sticker(CHANNEL_ID, LOSS_STICKER_ID)
-                    print(f"Period {expired_period}: LOSS sticker sent.")
+                    print(f"Period {expired_period}: LOSS. No sticker. Moving to next level.")
+                    current_level += 1  # Increase Level on loss
+                    
     except Exception as error:
         print(f"Evaluation error: {error}")
 
@@ -160,13 +138,15 @@ def automatic_prediction_loop():
             current_period = get_current_period_info()
 
             if current_period != last_period:
+                # Evaluate the previous period before sending the next one
                 if last_period is not None:
                     evaluate_previous_period(last_period)
 
                 send_prediction()
                 last_period = current_period
 
-            time.sleep(2)
+            # Sleep for 1 second and check again to ensure exact minute timing
+            time.sleep(1)
 
         except Exception as error:
             print(f"Automatic loop error: {error}")
@@ -179,9 +159,9 @@ def automatic_prediction_loop():
 @bot.message_handler(commands=["start"])
 def start_command(message):
     text = (
-        "🤖 <b>Wingo Channel Bot</b>\n\n"
+        "🤖 <b>TA Drama Shorts Bot</b>\n\n"
         "🟢 Bot is online.\n\n"
-        "The bot is configured to automatically post predictions and result stickers."
+        "The bot is configured to automatically post predictions and WIN stickers."
     )
     bot.reply_to(message, text, parse_mode="HTML")
 
@@ -190,7 +170,7 @@ def start_command(message):
 def help_command(message):
     text = (
         "❓ <b>BOT HELP</b>\n\n"
-        "Automatic predictions and win/loss stickers are active."
+        "Automatic predictions and WIN stickers are active. Levels change automatically based on simulated results."
     )
     bot.reply_to(message, text, parse_mode="HTML")
 
