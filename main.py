@@ -16,7 +16,7 @@ import telebot
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8226177508:AAEhEO8PwgrvY-mYA8hCJhB5Vag977iay_E")
 CHANNEL_ID = -1002814870264
 
-WIN_STICKER_ID = "CAACAgUAAxkBAAEG_8pqpxMonFOAxGhTf1PjBPQzORf2UwACxiAAAlKt-FSX-5IBfGtcPz0E"
+WIN_STICKER_ID = "CAACAgUAAxkBAAEG_9dqpxaKXtzfwrbW4Na4DTUzBCMvUQACahIAAvYiyVZikUGUoRZynz0E"
 
 # ============================================================
 # INITIALIZATION
