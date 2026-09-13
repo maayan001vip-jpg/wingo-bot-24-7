@@ -83,10 +83,10 @@ def send_prediction():
         size = prediction["size"]
 
         message = (
+            "👑 𝕍𝔼𝔼ℝ 𝔾𝔸𝕄𝔼 👑\n"
             "🔥 <b>WINGO 1 MIN</b> 🔥\n\n"
             f"📅 <b>PERIOD NUMBER:</b> <code>{period}</code>\n\n"
-            f"📊 <b>PREDICTION:</b> {size}\n"
-            f"📈 <b>LEVEL:</b> <code>{level}</code>\n\n"
+            f"📊 <b>PREDICTION:</b> {size}\n\n"
             "📩 <b>DM FOR MORE DETAILS:</b>\n"
             "@Maayan001\n"
             "@anonymoustele01\n"
@@ -99,7 +99,7 @@ def send_prediction():
             message,
             parse_mode="HTML"
         )
-        print(f"Prediction sent: {period} (Level {level})")
+        print(f"Prediction sent: {period} (Invisible Level: {level})")
 
     except Exception as error:
         print(f"Prediction error: {error}")
@@ -113,7 +113,7 @@ def evaluate_previous_period(expired_period):
             if expired_period in predictions:
                 pred = predictions[expired_period]
                 
-                # Logic to guarantee a WIN before reaching level 8
+                # Logic to guarantee a WIN before reaching level 8 (runs invisibly)
                 if current_level >= 7:
                     actual_size = pred["size"] # Force win
                 else:
@@ -195,7 +195,7 @@ def status_command(message):
         "📊 <b>BOT STATUS</b>\n\n"
         "🟢 Status: <code>ONLINE</code>\n"
         f"⏳ Uptime: <code>{hours}h {minutes}m</code>\n"
-        f"📈 Level: <code>{level}</code>\n"
+        f"📈 Hidden Level: <code>{level}</code>\n"
         f"🔄 Rounds: <code>{rounds}</code>\n"
         f"📢 Channel ID: <code>{CHANNEL_ID}</code>"
     )
