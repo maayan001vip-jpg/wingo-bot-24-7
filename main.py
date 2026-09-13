@@ -32,25 +32,33 @@ bot_start_time = time.time()
 state_lock = threading.Lock()
 
 # ============================================================
-# REAL-TIME API FETCHING
+# REAL-TIME API FETCHING (WITH HEADERS FIX)
 # ============================================================
 
 def fetch_latest_game_data():
-    """Fetches the actual real-time game result directly from Wingo API."""
+    """Fetches the actual real-time game result directly from Wingo API using Browser Headers."""
     url = f"https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json?ts={int(time.time()*1000)}"
+    
+    # Adding headers to bypass bot protection
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Connection": "keep-alive"
+    }
+    
     try:
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, headers=headers, timeout=5)
         data = response.json()
         
         if data.get("code") == 0:
-            # First item in the list is the most recently completed round
             latest_record = data["data"]["list"][0]
             issue_number = str(latest_record["issueNumber"])
             number = int(latest_record["number"])
             
-            # Wingo Logic: 0-4 is SMALL, 5-9 is BIG
             actual_size = "📈 BIG" if number >= 5 else "📉 SMALL"
             return issue_number, actual_size
+        else:
+            print(f"API Data Error: {data}")
     except Exception as e:
         print(f"API Fetch Error: {e}")
         
@@ -61,7 +69,6 @@ def fetch_latest_game_data():
 # ============================================================
 
 def send_prediction(period):
-    """Generates and sends prediction for the NEXT period."""
     global total_rounds_played
     try:
         size = random.choice(["📈 BIG", "📉 SMALL"])
@@ -71,7 +78,6 @@ def send_prediction(period):
             predictions[period] = {"size": size, "created_at": time.time()}
             level = current_level
 
-            # Keep dictionary size manageable
             if len(predictions) > 20:
                 oldest_period = next(iter(predictions))
                 del predictions[oldest_period]
@@ -106,11 +112,9 @@ def automatic_prediction_loop():
 
     while True:
         try:
-            # 1. Fetch latest real results from API
             latest_issue, actual_size = fetch_latest_game_data()
 
             if latest_issue:
-                # 2. Evaluate the just-completed period
                 if latest_issue != last_evaluated_period:
                     with state_lock:
                         if latest_issue in predictions:
@@ -127,17 +131,17 @@ def automatic_prediction_loop():
                             
                     last_evaluated_period = latest_issue
 
-                # 3. Predict the NEXT period exactly based on the server's issue number
                 next_period = str(int(latest_issue) + 1)
                 
                 if next_period != current_prediction_period:
                     send_prediction(next_period)
                     current_prediction_period = next_period
+            else:
+                print("Waiting for API data...")
 
         except Exception as error:
             print(f"Automatic loop error: {error}")
         
-        # Check API every 3 seconds for lightning-fast sync
         time.sleep(3)
 
 # ============================================================
