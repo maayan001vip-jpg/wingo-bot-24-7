@@ -3,6 +3,7 @@ import os
 import random
 import threading
 import time
+import requests
 
 from flask import Flask
 import pytz
@@ -31,56 +32,49 @@ bot_start_time = time.time()
 state_lock = threading.Lock()
 
 # ============================================================
-# PERIOD & PREDICTION GENERATION
+# REAL-TIME API FETCHING
 # ============================================================
 
-def get_current_period_info():
-    # EXACT FIX: Wingo servers use UTC time, NOT Indian Time.
-    tz = pytz.utc
-    now = datetime.datetime.now(tz)
-    total_minutes = now.hour * 60 + now.minute
-    sequence = total_minutes + 1
-    date_string = now.strftime("%Y%m%d")
-    return f"{date_string}10001{sequence:04d}"
-
-
-def generate_prediction():
-    # Only returns BIG or SMALL
-    return random.choice(["📈 BIG", "📉 SMALL"])
-
-
-def create_prediction():
-    global total_rounds_played
-    period = get_current_period_info()
-    size = generate_prediction()
-
-    prediction = {
-        "period": period,
-        "size": size,
-        "created_at": time.time(),
-    }
-
-    with state_lock:
-        total_rounds_played += 1
-        predictions[period] = prediction
-        level = current_level
-
-        if len(predictions) > 20:
-            oldest_period = next(iter(predictions))
-            del predictions[oldest_period]
-
-    return prediction, level
+def fetch_latest_game_data():
+    """Fetches the actual real-time game result directly from Wingo API."""
+    url = f"https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json?ts={int(time.time()*1000)}"
+    try:
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        
+        if data.get("code") == 0:
+            # First item in the list is the most recently completed round
+            latest_record = data["data"]["list"][0]
+            issue_number = str(latest_record["issueNumber"])
+            number = int(latest_record["number"])
+            
+            # Wingo Logic: 0-4 is SMALL, 5-9 is BIG
+            actual_size = "📈 BIG" if number >= 5 else "📉 SMALL"
+            return issue_number, actual_size
+    except Exception as e:
+        print(f"API Fetch Error: {e}")
+        
+    return None, None
 
 # ============================================================
 # TELEGRAM DISPATCH & RESULT CHECKER
 # ============================================================
 
-def send_prediction():
+def send_prediction(period):
+    """Generates and sends prediction for the NEXT period."""
+    global total_rounds_played
     try:
-        prediction, level = create_prediction()
+        size = random.choice(["📈 BIG", "📉 SMALL"])
+        
+        with state_lock:
+            total_rounds_played += 1
+            predictions[period] = {"size": size, "created_at": time.time()}
+            level = current_level
 
-        period = prediction["period"]
-        size = prediction["size"]
+            # Keep dictionary size manageable
+            if len(predictions) > 20:
+                oldest_period = next(iter(predictions))
+                del predictions[oldest_period]
 
         message = (
             "👑 𝕍𝔼𝔼ℝ 𝔾𝔸𝕄𝔼 👑\n"
@@ -90,8 +84,7 @@ def send_prediction():
             "📩 <b>DM FOR MORE DETAILS:</b>\n"
             "@Maayan001\n"
             "@anonymoustele01\n"
-            "@madexgurl\n\n"
-            "⚠️ <i>Prediction generated automatically.</i>"
+            "@madexgurl"
         )
 
         bot.send_message(
@@ -99,87 +92,66 @@ def send_prediction():
             message,
             parse_mode="HTML"
         )
-        print(f"Prediction sent: {period} (Invisible Level: {level})")
+        print(f"Prediction sent: {period} (Invisible Level {level})")
 
     except Exception as error:
         print(f"Prediction error: {error}")
 
 
-def evaluate_previous_period(expired_period):
-    """Evaluates result, ensures win within 8 levels, sends WIN sticker."""
-    global current_level
-    try:
-        with state_lock:
-            if expired_period in predictions:
-                pred = predictions[expired_period]
-                
-                # Logic to guarantee a WIN before reaching level 8 (runs invisibly)
-                if current_level >= 7:
-                    actual_size = pred["size"] # Force win
-                else:
-                    # 40% chance to win naturally on lower levels
-                    if random.random() < 0.40:
-                        actual_size = pred["size"]
-                    else:
-                        actual_size = "📈 BIG" if pred["size"] == "📉 SMALL" else "📉 SMALL"
-
-                is_win = (pred["size"] == actual_size)
-
-                if is_win:
-                    bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
-                    print(f"Period {expired_period}: WIN! Level reset to 1.")
-                    current_level = 1  
-                else:
-                    print(f"Period {expired_period}: LOSS. Moving to Level {current_level + 1}.")
-                    current_level += 1  
-                    
-    except Exception as error:
-        print(f"Evaluation error: {error}")
-
-
 def automatic_prediction_loop():
-    print("Automatic prediction system started.")
-    last_period = None
+    global current_level
+    print("Real-time API prediction system started.")
+    last_evaluated_period = None
+    current_prediction_period = None
 
     while True:
         try:
-            current_period = get_current_period_info()
+            # 1. Fetch latest real results from API
+            latest_issue, actual_size = fetch_latest_game_data()
 
-            if current_period != last_period:
-                if last_period is not None:
-                    evaluate_previous_period(last_period)
+            if latest_issue:
+                # 2. Evaluate the just-completed period
+                if latest_issue != last_evaluated_period:
+                    with state_lock:
+                        if latest_issue in predictions:
+                            pred = predictions[latest_issue]
+                            is_win = (pred["size"] == actual_size)
+                            
+                            if is_win:
+                                bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
+                                print(f"Period {latest_issue}: REAL WIN! Level reset to 1.")
+                                current_level = 1
+                            else:
+                                print(f"Period {latest_issue}: REAL LOSS. Moving to Level {current_level + 1}.")
+                                current_level += 1
+                            
+                    last_evaluated_period = latest_issue
 
-                send_prediction()
-                last_period = current_period
-
-            time.sleep(1)
+                # 3. Predict the NEXT period exactly based on the server's issue number
+                next_period = str(int(latest_issue) + 1)
+                
+                if next_period != current_prediction_period:
+                    send_prediction(next_period)
+                    current_prediction_period = next_period
 
         except Exception as error:
             print(f"Automatic loop error: {error}")
-            time.sleep(5)
+        
+        # Check API every 3 seconds for lightning-fast sync
+        time.sleep(3)
 
 # ============================================================
 # BOT COMMAND HANDLERS
 # ============================================================
 
-@bot.message_handler(commands=["start"])
+@bot.message_handler(commands=["start", "help"])
 def start_command(message):
     text = (
         "🤖 <b>TA Drama Shorts Bot</b>\n\n"
-        "🟢 Bot is online.\n\n"
-        "The bot automatically posts predictions and guarantees wins under 8 levels."
+        "🟢 Bot is online and synced with Real Wingo API.\n\n"
+        "Predictions and true WIN stickers run entirely automatically."
     )
     bot.reply_to(message, text, parse_mode="HTML")
-
-
-@bot.message_handler(commands=["help"])
-def help_command(message):
-    text = (
-        "❓ <b>BOT HELP</b>\n\n"
-        "Automatic predictions and WIN stickers are active. Levels change automatically (max level safety implemented)."
-    )
-    bot.reply_to(message, text, parse_mode="HTML")
-
 
 @bot.message_handler(commands=["status"])
 def status_command(message):
@@ -193,7 +165,7 @@ def status_command(message):
 
     text = (
         "📊 <b>BOT STATUS</b>\n\n"
-        "🟢 Status: <code>ONLINE</code>\n"
+        "🟢 Status: <code>ONLINE (API SYNCED)</code>\n"
         f"⏳ Uptime: <code>{hours}h {minutes}m</code>\n"
         f"📈 Hidden Level: <code>{level}</code>\n"
         f"🔄 Rounds: <code>{rounds}</code>\n"
@@ -207,8 +179,7 @@ def status_command(message):
 
 @app.route("/")
 def home():
-    return "Telegram Channel Bot is online."
-
+    return "Telegram Channel Bot is online and synced with API."
 
 @app.route("/health")
 def health():
