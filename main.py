@@ -35,12 +35,12 @@ state_lock = threading.Lock()
 # ============================================================
 
 def get_current_period_info():
-    tz = pytz.timezone("Asia/Kolkata")
+    # EXACT FIX: Wingo servers use UTC time, NOT Indian Time.
+    tz = pytz.utc
     now = datetime.datetime.now(tz)
     total_minutes = now.hour * 60 + now.minute
     sequence = total_minutes + 1
     date_string = now.strftime("%Y%m%d")
-    # Correct Wingo format: 2026091410001XXXX
     return f"{date_string}10001{sequence:04d}"
 
 
@@ -115,8 +115,7 @@ def evaluate_previous_period(expired_period):
                 
                 # Logic to guarantee a WIN before reaching level 8
                 if current_level >= 7:
-                    # Force win
-                    actual_size = pred["size"]
+                    actual_size = pred["size"] # Force win
                 else:
                     # 40% chance to win naturally on lower levels
                     if random.random() < 0.40:
@@ -129,10 +128,10 @@ def evaluate_previous_period(expired_period):
                 if is_win:
                     bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
                     print(f"Period {expired_period}: WIN! Level reset to 1.")
-                    current_level = 1  # Reset to Level 1 on win
+                    current_level = 1  
                 else:
                     print(f"Period {expired_period}: LOSS. Moving to Level {current_level + 1}.")
-                    current_level += 1  # Increase Level on loss
+                    current_level += 1  
                     
     except Exception as error:
         print(f"Evaluation error: {error}")
