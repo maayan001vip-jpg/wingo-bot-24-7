@@ -20,7 +20,7 @@ STICKER_BIG = "CAACAgIAAxkBAAE..."
 STICKER_SMALL = "CAACAgIAAxkBAAE..." 
 
 # State tracking (Base values setup)
-current_period = 20260913100011150
+current_period = 20260913100010941
 current_level = 1
 
 # Alternate between BIG and SMALL for predictions (or connect your algorithm logic)
@@ -95,7 +95,8 @@ def main() -> None:
     app.add_handler(CommandHandler("loss", loss_command))
 
     logging.info("Wingo signal bot running...")
-    app.run_polling()
+    # drop_pending_updates=True will clear the conflict queue
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
