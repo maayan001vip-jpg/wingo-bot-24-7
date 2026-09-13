@@ -15,6 +15,7 @@ import telebot
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8226177508:AAEhEO8PwgrvY-mYA8hCJhB5Vag977iay_E")
 CHANNEL_ID = -1002814870264
 
+# Note: Send a sticker to the bot privately to get its correct ID
 WIN_STICKER_ID = "CAACAgUAAxkBAAER4h1qo_aDagqTDFeZsvVfXRWkHL1gMQACxiAAAlKt-FSX-5IBfGtcPz0E"
 
 # ============================================================
@@ -40,7 +41,6 @@ state_lock = threading.Lock()
 MAX_HISTORY = 50
 MAX_PREDICTIONS = 50
 
-
 # ============================================================
 # PERIOD (UTC SYNCED FOR WINGO)
 # ============================================================
@@ -52,7 +52,6 @@ def get_time_based_period():
     sequence = total_minutes + 1
     date_string = now.strftime("%Y%m%d")
     return f"{date_string}10001{sequence:04d}"
-
 
 # ============================================================
 # BIG / SMALL & COLOR
@@ -71,7 +70,6 @@ def get_color(number):
     else:
         return "GREEN + VIOLET"
 
-
 # ============================================================
 # HISTORY & PATTERNS
 # ============================================================
@@ -85,10 +83,7 @@ def add_to_history(number):
 def size_history():
     with state_lock:
         data = list(history)
-    return [
-        "B" if get_size(x) == "BIG" else "S"
-        for x in data
-    ]
+    return ["B" if get_size(x) == "BIG" else "S" for x in data]
 
 def get_runs(sequence):
     if not sequence:
@@ -124,10 +119,8 @@ def detect_patterns(sequence):
 
     if len(sequence) >= 3 and len(set(sequence[-3:])) == 1:
         patterns.append("TRIPLE TREND")
-
     if len(sequence) >= 4 and len(set(sequence[-4:])) == 1:
         patterns.append("QUAD TREND")
-
     if len(sequence) >= 5 and len(set(sequence[-5:])) == 1:
         patterns.append("LONG TREND")
 
@@ -154,9 +147,8 @@ def analyze_history():
         "patterns": patterns
     }
 
-
 # ============================================================
-# AUTOMATIC PREDICTION GENERATOR (FIXED)
+# AUTOMATIC PREDICTION GENERATOR 
 # ============================================================
 
 def send_prediction(period):
@@ -191,13 +183,10 @@ def send_prediction(period):
 
 def automatic_prediction_loop():
     print("Automatic prediction loop started.")
-    last_period = None
+    last_period = get_time_based_period()
     
-    # Send first prediction immediately on startup
     try:
-        initial_period = get_time_based_period()
-        send_prediction(initial_period)
-        last_period = initial_period
+        send_prediction(last_period)
     except Exception as e:
         print(f"Initial prediction error: {e}")
 
@@ -205,16 +194,22 @@ def automatic_prediction_loop():
         try:
             current_period = get_time_based_period()
             if current_period != last_period:
+                # 15 seconds delay so you have time to enter /result for level update
+                time.sleep(15) 
                 send_prediction(current_period)
                 last_period = current_period
         except Exception as error:
             print(f"Loop error: {error}")
         time.sleep(2)
 
+# ============================================================
+# COMMANDS
+# ============================================================
 
-# ============================================================
-# COMMANDS (ALL OPEN)
-# ============================================================
+# Sticker ID Fetcher
+@bot.message_handler(content_types=['sticker'])
+def handle_sticker(message):
+    bot.reply_to(message, f"Paste this ID into WIN_STICKER_ID:\n\n<code>{message.sticker.file_id}</code>", parse_mode="HTML")
 
 @bot.message_handler(commands=["add"])
 def add_command(message):
@@ -242,22 +237,13 @@ def add_command(message):
     except ValueError:
         bot.reply_to(message, "❌ Correct number kudu.\nExample: /add 7")
 
-
 @bot.message_handler(commands=["result"])
 def result_command(message):
     global current_level
     try:
         parts = message.text.split()
         if len(parts) != 3:
-            bot.reply_to(
-                message,
-                (
-                    "Usage:\n"
-                    "/result PERIOD NUMBER\n\n"
-                    "Example:\n"
-                    "/result 20260914100010001 7"
-                )
-            )
+            bot.reply_to(message, "Usage:\n/result PERIOD NUMBER\nExample:\n/result 20260914100010001 7")
             return
 
         period = parts[1]
@@ -280,7 +266,7 @@ def result_command(message):
             predicted_size = prediction["size"]
             actual_size = get_size(number)
 
-            is_win = predicted_size == actual_size
+            is_win = (predicted_size == actual_size)
             results[period] = {
                 "number": number,
                 "size": actual_size,
@@ -313,19 +299,16 @@ def result_command(message):
 
         bot.reply_to(message, text, parse_mode="HTML")
 
-        if is_win and WIN_STICKER_ID:
+        if is_win:
             try:
-                bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
+                if WIN_STICKER_ID:
+                    bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
             except Exception as error:
-                print("Sticker error:", error)
+                print("Sticker failed to send:", error)
+                bot.send_message(CHANNEL_ID, "🎉 <b>SUPER WIN!</b> 🎉", parse_mode="HTML")
 
     except ValueError:
         bot.reply_to(message, "❌ Number correct-ah kudu.")
-
-
-# ============================================================
-# GENERAL COMMANDS
-# ============================================================
 
 @bot.message_handler(commands=["history"])
 def history_command(message):
@@ -342,7 +325,6 @@ def history_command(message):
     ]
     text = "📋 <b>RECENT HISTORY</b>\n\n" + "\n".join(lines)
     bot.reply_to(message, text, parse_mode="HTML")
-
 
 @bot.message_handler(commands=["analysis"])
 def analysis_command(message):
@@ -364,7 +346,6 @@ def analysis_command(message):
         f"🔍 Patterns:\n<code>{patterns}</code>"
     )
     bot.reply_to(message, text, parse_mode="HTML")
-
 
 @bot.message_handler(commands=["status"])
 def status_command(message):
@@ -388,7 +369,6 @@ def status_command(message):
     )
     bot.reply_to(message, text, parse_mode="HTML")
 
-
 @bot.message_handler(commands=["start", "help"])
 def start_command(message):
     text = (
@@ -403,14 +383,13 @@ def start_command(message):
     )
     bot.reply_to(message, text, parse_mode="HTML")
 
-
 # ============================================================
 # FLASK & RUNNER
 # ============================================================
 
 @app.route("/")
 def home():
-    return "Bot is active."
+    return "Bot is active and running 24/7."
 
 def run_bot():
     while True:
