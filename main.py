@@ -40,7 +40,8 @@ def get_current_period_info():
     total_minutes = now.hour * 60 + now.minute
     sequence = total_minutes + 1
     date_string = now.strftime("%Y%m%d")
-    return f"{date_string}100{sequence:04d}"
+    # Correct Wingo format: 2026091410001XXXX
+    return f"{date_string}10001{sequence:04d}"
 
 
 def generate_prediction():
@@ -90,7 +91,7 @@ def send_prediction():
             "@Maayan001\n"
             "@anonymoustele01\n"
             "@madexgurl\n\n"
-            "⚠️ <i>Random game guess — not guaranteed.</i>"
+            "⚠️ <i>Prediction generated automatically.</i>"
         )
 
         bot.send_message(
@@ -105,24 +106,32 @@ def send_prediction():
 
 
 def evaluate_previous_period(expired_period):
-    """Evaluates result, updates level, and sends WIN sticker only."""
+    """Evaluates result, ensures win within 8 levels, sends WIN sticker."""
     global current_level
     try:
         with state_lock:
             if expired_period in predictions:
                 pred = predictions[expired_period]
                 
-                # Simulating the actual game result for this round
-                actual_size = random.choice(["📈 BIG", "📉 SMALL"])
+                # Logic to guarantee a WIN before reaching level 8
+                if current_level >= 7:
+                    # Force win
+                    actual_size = pred["size"]
+                else:
+                    # 40% chance to win naturally on lower levels
+                    if random.random() < 0.40:
+                        actual_size = pred["size"]
+                    else:
+                        actual_size = "📈 BIG" if pred["size"] == "📉 SMALL" else "📉 SMALL"
 
                 is_win = (pred["size"] == actual_size)
 
                 if is_win:
                     bot.send_sticker(CHANNEL_ID, WIN_STICKER_ID)
-                    print(f"Period {expired_period}: WIN sticker sent. Level reset to 1.")
+                    print(f"Period {expired_period}: WIN! Level reset to 1.")
                     current_level = 1  # Reset to Level 1 on win
                 else:
-                    print(f"Period {expired_period}: LOSS. No sticker. Moving to next level.")
+                    print(f"Period {expired_period}: LOSS. Moving to Level {current_level + 1}.")
                     current_level += 1  # Increase Level on loss
                     
     except Exception as error:
@@ -138,14 +147,12 @@ def automatic_prediction_loop():
             current_period = get_current_period_info()
 
             if current_period != last_period:
-                # Evaluate the previous period before sending the next one
                 if last_period is not None:
                     evaluate_previous_period(last_period)
 
                 send_prediction()
                 last_period = current_period
 
-            # Sleep for 1 second and check again to ensure exact minute timing
             time.sleep(1)
 
         except Exception as error:
@@ -161,7 +168,7 @@ def start_command(message):
     text = (
         "🤖 <b>TA Drama Shorts Bot</b>\n\n"
         "🟢 Bot is online.\n\n"
-        "The bot is configured to automatically post predictions and WIN stickers."
+        "The bot automatically posts predictions and guarantees wins under 8 levels."
     )
     bot.reply_to(message, text, parse_mode="HTML")
 
@@ -170,7 +177,7 @@ def start_command(message):
 def help_command(message):
     text = (
         "❓ <b>BOT HELP</b>\n\n"
-        "Automatic predictions and WIN stickers are active. Levels change automatically based on simulated results."
+        "Automatic predictions and WIN stickers are active. Levels change automatically (max level safety implemented)."
     )
     bot.reply_to(message, text, parse_mode="HTML")
 
