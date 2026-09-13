@@ -18,7 +18,7 @@ CHANNEL_ID = -1002814870264
 WIN_STICKER_ID = "CAACAgUAAxkBAAER4h1qo_aDagqTDFeZsvVfXRWkHL1gMQACxiAAAlKt-FSX-5IBfGtcPz0E"
 
 # Telegram user IDs who can use admin commands (Leave empty set {} if everyone can use, or add your Telegram ID number)
-ADMIN_IDS = set()
+ADMIN_IDS = set(6842709265)
 
 # ============================================================
 # INITIALIZATION
