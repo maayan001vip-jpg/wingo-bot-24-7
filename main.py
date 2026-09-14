@@ -31,14 +31,20 @@ bot_start_time = time.time()
 state_lock = threading.Lock()
 
 # ============================================================
-# PERIOD & PATTERNS
+# PERIOD & PATTERNS (UPDATED FOR 30 SECONDS)
 # ============================================================
 
 def get_time_based_period():
     tz = pytz.utc
     now = datetime.datetime.now(tz)
     total_minutes = now.hour * 60 + now.minute
-    sequence = total_minutes + 1
+    
+    # 2 rounds per minute for 30-second game
+    if now.second < 30:
+        sequence = (total_minutes * 2) + 1
+    else:
+        sequence = (total_minutes * 2) + 2
+        
     date_string = now.strftime("%Y%m%d")
     return f"{date_string}10001{sequence:04d}"
 
@@ -109,7 +115,7 @@ def send_prediction(period):
 
         message = (
             "👑 𝕍𝔼𝔼ℝ 𝔾𝔸𝕄𝔼 👑\n"
-            "🔥 <b>WINGO 1 MIN</b> 🔥\n\n"
+            "🔥 <b>WINGO 30 SEC</b> 🔥\n\n"
             f"📅 <b>PERIOD NUMBER:</b> <code>{period}</code>\n\n"
             f"📊 <b>PREDICTION:</b> <b>{size}</b>\n\n"
             "📩 <b>DM FOR MORE DETAILS:</b>\n"
@@ -161,7 +167,8 @@ def automatic_prediction_loop():
         except Exception as error:
             print(f"Loop error: {error}")
 
-        time.sleep(2)
+        # Checks every 1.5 seconds to ensure it catches the exact 30-second mark
+        time.sleep(1.5)
 
 # ============================================================
 # BOT COMMAND HANDLERS
@@ -170,7 +177,7 @@ def automatic_prediction_loop():
 @bot.message_handler(commands=["start", "help"])
 def start_command(message):
     text = (
-        "🤖 <b>Veer Game Bot</b>\n\n"
+        "🤖 <b>Veer Game Bot (30s)</b>\n\n"
         "🟢 Bot is online and running smoothly.\n\n"
         "<b>Commands:</b>\n"
         "/status - View uptime & records\n"
@@ -242,7 +249,7 @@ def status_command(message):
 
 @app.route("/")
 def home():
-    return "Bot is active."
+    return "Bot is active (30 Sec Mode)."
 
 def run_bot():
     while True:
