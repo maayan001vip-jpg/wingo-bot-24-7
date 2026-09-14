@@ -107,7 +107,6 @@ def send_prediction(period):
                 oldest = next(iter(predictions))
                 del predictions[oldest]
 
-        # Level display removed entirely
         message = (
             "👑 𝕍𝔼𝔼ℝ 𝔾𝔸𝕄𝔼 👑\n"
             "🔥 <b>WINGO 1 MIN</b> 🔥\n\n"
@@ -136,13 +135,12 @@ def automatic_prediction_loop():
                 if last_period is not None:
                     # Simulation: 55% win chance
                     is_win = (random.random() < 0.55)
-                    
+
                     with state_lock:
                         if last_period in predictions:
                             predicted = predictions[last_period]["size"]
-                            # Determine actual size based on win/loss
                             actual_size = predicted if is_win else ("SMALL" if predicted == "BIG" else "BIG")
-                            
+
                             # Add to history for Pattern logic
                             history.append("B" if actual_size == "BIG" else "S")
                             if len(history) > 50:
@@ -198,7 +196,7 @@ def history_command(message):
 def analysis_command(message):
     with state_lock:
         seq = list(history)
-    
+
     if len(seq) < 3:
         bot.reply_to(message, "❌ Not enough history for analysis. Wait for a few rounds.")
         return
@@ -256,4 +254,5 @@ def run_bot():
 if __name__ == "__main__":
     threading.Thread(target=run_bot, daemon=True).start()
     threading.Thread(target=automatic_prediction_loop, daemon=True).start()
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
